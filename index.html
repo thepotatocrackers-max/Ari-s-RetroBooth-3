@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARCADE PHOTOBOOTH // INSERT COIN</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-pink: #ff007f;
+            --neon-cyan: #00f3ff;
+            --arcade-black: #0d0d1a;
+            --neon-yellow: #fffb00;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Press Start 2P', monospace; }
+
+        body {
+            background-color: var(--arcade-black);
+            background-image: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 6px 100%;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            text-shadow: 3px 3px 0px var(--neon-pink), -3px -3px 0px var(--neon-cyan);
+            margin-bottom: 25px;
+            animation: blink 2s infinite alternate;
+        }
+
+        .arcade-cabinet {
+            background: #1a1a3a;
+            border: 4px solid var(--neon-cyan);
+            box-shadow: 0 0 20px var(--neon-cyan);
+            border-radius: 8px;
+            padding: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .screen-container {
+            position: relative;
+            background: #000;
+            border: 4px solid var(--neon-pink);
+            aspect-ratio: 4 / 3;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+        .flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff; opacity: 0; pointer-events: none;
+            z-index: 10;
+        }
+
+        #countdown {
+            position: absolute;
+            font-size: 5rem;
+            color: var(--neon-yellow);
+            text-shadow: 4px 4px 0px #000;
+            z-index: 5;
+            display: none;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            color: #fff;
+            border: 3px solid #fff;
+            padding: 15px 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-shadow: 2px 2px 0px #000;
+            transition: all 0.1s ease;
+        }
+
+        .btn-shutter { background: var(--neon-pink); box-shadow: 0 5px 0px #99004c; }
+        .btn-print { background: var(--neon-cyan); box-shadow: 0 5px 0px #008ba3; display: none; }
+
+        .btn:active { transform: translateY(5px); box-shadow: 0 0px 0px transparent; }
+
+        .strip-container {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .prize-photo {
+            background: #fff;
+            padding: 8px 8px 20px 8px;
+            border: 2px solid #000;
+            box-shadow: 5px 5px 0px var(--neon-cyan);
+        }
+
+        .prize-photo img { width: 120px; display: block; transform: scaleX(-1); }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>= PHOTO BOOTH =</h1>
+
+    <div class="arcade-cabinet">
+        <div class="screen-container">
+            <div class="flash" id="flashOverlay"></div>
+            <div id="countdown">3</div>
+            <video id="webcam" autoplay playsinline></video>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-shutter" id="shutterBtn">CAPTURE</button>
+            <button class="btn btn-print" id="printBtn">PRINT STRIP</button>
+        </div>
+    </div>
+
+    <div class="strip-container" id="gallery"></div>
+    <canvas id="captureCanvas"></canvas>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const shutterBtn = document.getElementById('shutterBtn');
+        const printBtn = document.getElementById('printBtn');
+        const countdownEl = document.getElementById('countdown');
+        const flashOverlay = document.getElementById('flashOverlay');
+        const gallery = document.getElementById('gallery');
+        const canvas = document.getElementById('captureCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let capturedImages = [];
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("Camera access denied!");
+            }
+        }
+
+        shutterBtn.addEventListener('click', () => {
+            shutterBtn.disabled = true;
+            let count = 3;
+            countdownEl.innerText = count;
+            countdownEl.style.display = 'block';
+
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.innerText = count;
+                } else {
+                    clearInterval(timer);
+                    countdownEl.style.display = 'none';
+                    takePhoto();
+                }
+            }, 800);
+        });
+
+        function takePhoto() {
+            flashOverlay.style.opacity = '1';
+            setTimeout(() => { flashOverlay.style.opacity = '0'; }, 100);
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Flip the context so the saved image matches the mirrored preview
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const dataUrl = canvas.toDataURL('image/png');
+            capturedImages.push(dataUrl);
+
+            // Add to UI
+            const div = document.createElement('div');
+            div.className = 'prize-photo';
+            div.innerHTML = `<img src="${dataUrl}">`;
+            gallery.appendChild(div);
+
+            printBtn.style.display = 'inline-block';
+            shutterBtn.disabled = false;
+        }
+
+        printBtn.addEventListener('click', () => {
+            if (capturedImages.length === 0) return;
+
+            const stripCanvas = document.createElement('canvas');
+            const sCtx = stripCanvas.getContext('2d');
+            
+            const pWidth = 400;
+            const pHeight = 300;
+            const padding = 20;
+
+            stripCanvas.width = pWidth + (padding * 2);
+            stripCanvas.height = (capturedImages.length * (pHeight + padding)) + padding + 60;
+
+            // Background
+            sCtx.fillStyle = "white";
+            sCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
+
+            let loadedCount = 0;
+            capturedImages.forEach((src, index) => {
+                const img = new Image();
+                img.onload = () => {
+                    sCtx.drawImage(img, padding, padding + (index * (pHeight + padding)), pWidth, pHeight);
+                    loadedCount++;
+                    if (loadedCount === capturedImages.length) {
+                        // Add some retro text at the bottom
+                        sCtx.fillStyle = "black";
+                        sCtx.font = "20px monospace";
+                        sCtx.fillText("#Diva", padding, stripCanvas.height - 30);
+                        
+                        const link = document.createElement('a');
+                        link.download = 'arcade-strip.png';
+                        link.href = stripCanvas.toDataURL();
+                        link.click();
+                    }
+                };
+                img.src = src;
+            });
+        });
+
+        startCamera();
+    </script>
+</body>
+</html>
